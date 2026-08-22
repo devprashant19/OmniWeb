@@ -1,0 +1,96 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  profiles  Profile[]
+  workflows Workflow[]
+  runs      Run[]
+}
+
+model Profile {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  siteName  String
+  strategy  Strategy
+  status    String   // active | expired | needs_reauth
+  createdAt DateTime @default(now())
+}
+
+enum Strategy {
+  PUBLIC
+  COOKIE
+  INTERCEPT
+  UI
+  LOCAL
+}
+
+model Adapter {
+  id          String   @id @default(cuid())
+  siteName    String
+  commandName String
+  version     Int      @default(1)
+  strategy    Strategy
+  visibility  String   // built_in | private | plugin
+  publisherId String?
+  successRate Float    @default(1.0)
+  lastVerified DateTime?
+  driftEvents DriftEvent[]
+  createdAt   DateTime @default(now())
+}
+
+model DriftEvent {
+  id          String   @id @default(cuid())
+  adapterId   String
+  adapter     Adapter  @relation(fields: [adapterId], references: [id])
+  detectedAt  DateTime @default(now())
+  classification String // selector_drift | auth_expired | site_redesign | rate_limited | unknown
+  status      String   // detected | healing | verifying | resolved | escalated
+  resolvedAt  DateTime?
+  diffSummary String?
+}
+
+model Workflow {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  name      String
+  dsl       Json     // parsed workflow DSL
+  createdAt DateTime @default(now())
+  runs      Run[]
+}
+
+model Run {
+  id          String   @id @default(cuid())
+  workflowId  String
+  workflow    Workflow @relation(fields: [workflowId], references: [id])
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  status      String   // queued | running | waiting_approval | succeeded | failed | healed
+  startedAt   DateTime @default(now())
+  finishedAt  DateTime?
+  steps       RunStep[]
+  costTokensSaved Int  @default(0)
+}
+
+model RunStep {
+  id        String   @id @default(cuid())
+  runId     String
+  run       Run      @relation(fields: [runId], references: [id])
+  index     Int
+  command   String
+  strategy  Strategy
+  status    String   // pending | running | succeeded | failed | healing | skipped
+  startedAt DateTime?
+  finishedAt DateTime?
+  output    Json?
+  error     String?
+}
