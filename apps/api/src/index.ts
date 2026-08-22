@@ -8,7 +8,8 @@ const fastify = Fastify({ logger: true });
 
 async function start() {
   await fastify.register(cors, {
-    origin: '*',
+    origin: process.env.CORS_ORIGIN ?? '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   });
 
   await fastify.register(routes, { prefix: '/api' });
