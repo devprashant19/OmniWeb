@@ -1,4 +1,4 @@
-const API_BASE = `${(import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/+$/, '')}/api`;
+const API_BASE = `${(import.meta.env.VITE_API_URL ?? 'http://localhost:3001').replace(/\/+$/, '')}/api`;
 
 export async function fetchAPI(endpoint: string, options?: RequestInit) {
   const headers: HeadersInit = { 
