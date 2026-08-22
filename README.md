@@ -13,8 +13,10 @@ OmniWeb sits above the Webcmd CLI, providing everything a team needs to run brow
 | [📖 Architecture](./docs/ARCHITECTURE.md) | System design, data flow, and component breakdown |
 | [⚙️ Working](./docs/WORKING.md) | How the engine, healing loop, and DSL work internally |
 | [🚀 Setup Guide](./docs/SETUP.md) | Local dev, Docker, and environment configuration |
+| [🌐 Deployment](./docs/DEPLOYMENT.md) | VPS, Railway, Render, GCP Cloud Run, CI/CD |
 | [🔌 API Reference](./docs/API.md) | All REST endpoints and WebSocket events |
 | [🧩 Adapter Guide](./docs/ADAPTERS.md) | How Webcmd adapters are registered, used, and healed |
+| [🤝 Contributing](./docs/CONTRIBUTING.md) | Dev workflow and code style guide |
 
 ---
 
