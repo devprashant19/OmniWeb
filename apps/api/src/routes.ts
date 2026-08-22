@@ -1,7 +1,7 @@
-import { FastifyInstance } from 'fastify';
-import { prisma } from './db';
-import { runWorkflow, resumeWorkflow, triggerSimulatedDrift } from './mockEngine';
-import { parseWorkflowYAML } from './workflowParser';
+import type { FastifyInstance } from 'fastify';
+import { prisma } from './db.js';
+import { runWorkflow, resumeWorkflow, triggerSimulatedDrift } from './mockEngine.js';
+import { parseWorkflowYAML } from './workflowParser.js';
 import { z } from 'zod';
 
 export default async function routes(fastify: FastifyInstance) {
@@ -101,8 +101,12 @@ export default async function routes(fastify: FastifyInstance) {
   });
 
   fastify.post('/healing/trigger', async (request, reply) => {
-    triggerSimulatedDrift().catch(console.error);
-    return { success: true };
+    try {
+      await triggerSimulatedDrift();
+      return { success: true };
+    } catch (err: any) {
+      reply.status(400).send({ success: false, error: err.message });
+    }
   });
 
   // Tenants & Adapters

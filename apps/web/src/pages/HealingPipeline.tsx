@@ -1,34 +1,58 @@
 import { useEffect, useState } from 'react';
 import { fetchAPI } from '../lib/api';
 import { socket } from '../lib/socket';
-import { Activity, AlertTriangle, CheckCircle2, Clock, Play, ShieldAlert } from 'lucide-react';
+import { Activity, AlertTriangle, CheckCircle2, Play, ShieldAlert, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
 
 export default function HealingPipeline() {
   const [events, setEvents] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [triggering, setTriggering] = useState(false);
+  const [triggerError, setTriggerError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchAPI('/healing').then(setEvents);
+    // Bug fix #1: added .catch() to handle API errors gracefully
+    fetchAPI('/healing')
+      .then(setEvents)
+      .catch((err) => {
+        console.error('Failed to load healing events:', err);
+        setError('Could not load healing events. Is the API running?');
+      });
 
     socket.emit('subscribe_healing');
 
-    socket.on('drift_detected', (event: any) => {
+    const onDriftDetected = (event: any) => {
       setEvents(prev => [event, ...prev]);
-    });
+    };
 
-    socket.on('drift_updated', (data: { id: string, status: string }) => {
+    const onDriftUpdated = (data: { id: string, status: string }) => {
       setEvents(prev => prev.map(e => e.id === data.id ? { ...e, status: data.status } : e));
-    });
+    };
 
+    socket.on('drift_detected', onDriftDetected);
+    socket.on('drift_updated', onDriftUpdated);
+
+    // Bug fix #9: remove only the specific named handlers, not ALL listeners
     return () => {
-      socket.off('drift_detected');
-      socket.off('drift_updated');
+      socket.off('drift_detected', onDriftDetected);
+      socket.off('drift_updated', onDriftUpdated);
     };
   }, []);
 
   const triggerDrift = async () => {
-    await fetchAPI('/healing/trigger', { method: 'POST' });
+    setTriggering(true);
+    setTriggerError(null);
+    try {
+      const res = await fetchAPI('/healing/trigger', { method: 'POST' });
+      if (!res.success) {
+        setTriggerError(res.error || 'Failed to trigger drift');
+      }
+    } catch (err: any) {
+      setTriggerError(err.message || 'Failed to trigger drift. Make sure the database is seeded.');
+    } finally {
+      setTriggering(false);
+    }
   };
 
   const columns = [
@@ -49,15 +73,36 @@ export default function HealingPipeline() {
               Not a scraper — this is the healing loop that keeps 40 site adapters alive without a human touching selectors.
             </p>
           </div>
-          <button 
-            onClick={triggerDrift}
-            className="flex items-center gap-2 bg-destructive hover:bg-destructive/90 text-destructive-foreground px-4 py-2 rounded-md font-medium transition-colors"
-          >
-            <ShieldAlert className="w-5 h-5" />
-            Trigger Simulated Drift
-          </button>
+          <div className="flex flex-col items-end gap-2">
+            <button 
+              onClick={triggerDrift}
+              disabled={triggering}
+              className="flex items-center gap-2 bg-destructive hover:bg-destructive/90 disabled:opacity-50 text-destructive-foreground px-4 py-2 rounded-md font-medium transition-colors"
+            >
+              {triggering ? (
+                <div className="w-4 h-4 border-2 border-destructive-foreground/30 border-t-destructive-foreground rounded-full animate-spin" />
+              ) : (
+                <ShieldAlert className="w-5 h-5" />
+              )}
+              Trigger Simulated Drift
+            </button>
+            {triggerError && (
+              <div className="flex items-center gap-1.5 text-xs text-destructive max-w-xs text-right">
+                <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                {triggerError}
+              </div>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Error Banner */}
+      {error && (
+        <div className="bg-destructive/10 border-b border-destructive/20 px-6 py-3 flex items-center gap-2 text-sm text-destructive">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          {error}
+        </div>
+      )}
 
       {/* Kanban Board */}
       <div className="flex-1 overflow-x-auto p-6">
@@ -90,11 +135,12 @@ export default function HealingPipeline() {
                           {new Date(event.detectedAt).toLocaleTimeString()}
                         </span>
                       </div>
-                      <h4 className="text-sm font-medium mb-3">{event.classification.replace('_', ' ')}</h4>
+                      {/* Bug fix #2: optional chaining to prevent TypeError on null classification */}
+                      <h4 className="text-sm font-medium mb-3">{event.classification?.replace(/_/g, ' ') ?? 'Unknown'}</h4>
                       
                       {event.status !== 'resolved' ? (
                         <div className="bg-secondary/50 rounded p-2 text-xs font-mono text-muted-foreground line-clamp-2 mb-3">
-                          {event.diffSummary}
+                          {event.diffSummary ?? 'No details'}
                         </div>
                       ) : (
                         <div className="bg-green-500/10 border border-green-500/20 text-green-400 rounded p-2 text-xs font-mono line-clamp-2 mb-3">
@@ -106,6 +152,7 @@ export default function HealingPipeline() {
                         {event.status === 'healing' && <Activity className="w-3.5 h-3.5 text-amber-500 animate-pulse" />}
                         {event.status === 'verifying' && <Play className="w-3.5 h-3.5 text-blue-500 animate-bounce" />}
                         {event.status === 'resolved' && <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />}
+                        {event.status === 'detected' && <AlertTriangle className="w-3.5 h-3.5 text-red-500" />}
                         <span className="capitalize">{event.status}</span>
                       </div>
                     </motion.div>

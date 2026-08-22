@@ -14,8 +14,8 @@ export const StepSchema = z.object({
     backoff: z.string(),
   }).optional(),
   on_fail: z.enum(['continue', 'abort', 'heal_then_retry']).optional(),
-}).refine(data => data.run || data.approve, {
-  message: "Step must have either 'run' or 'approve'",
+}).refine(data => data.run || data.approve || data.if, {
+  message: "Step must have at least one of 'run', 'approve', or 'if'",
 });
 
 export const WorkflowSchema = z.object({

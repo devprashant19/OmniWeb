@@ -2,27 +2,37 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { fetchAPI } from '../lib/api';
 import { socket } from '../lib/socket';
-import { CheckCircle2, Circle, Loader2, XCircle, AlertTriangle, Terminal } from 'lucide-react';
+import { CheckCircle2, Circle, Loader2, XCircle, AlertTriangle, Terminal, AlertCircle } from 'lucide-react';
 import clsx from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function LiveRun() {
   const { id } = useParams();
   const [run, setRun] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
   const [tokensSaved, setTokensSaved] = useState(0);
   const [stepLogs, setStepLogs] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
-    // Initial fetch
-    fetchAPI(`/runs/${id}`).then(res => {
-      setRun(res);
-      setTokensSaved(res.costTokensSaved || 0);
-    });
+    // Bug fix #5: added .catch() with error state
+    fetchAPI(`/runs/${id}`)
+      .then(res => {
+        if (!res) {
+          setError(`Run "${id}" not found.`);
+          return;
+        }
+        setRun(res);
+        setTokensSaved(res.costTokensSaved || 0);
+      })
+      .catch((err) => {
+        console.error('Failed to load run:', err);
+        setError(`Could not load run. ${err.message}`);
+      });
 
-    // Socket subscriptions
     socket.emit('subscribe_run', id);
-    
-    socket.on('step_updated', (step: any) => {
+
+    // Bug fix #9: use named handlers so socket.off() only removes this component's listeners
+    const onStepUpdated = (step: any) => {
       setRun((prev: any) => {
         if (!prev) return prev;
         const steps = [...prev.steps];
@@ -31,33 +41,39 @@ export default function LiveRun() {
         else steps.push(step);
         return { ...prev, steps };
       });
-    });
+    };
 
-    socket.on('step_log', ({ stepId, log }: any) => {
+    const onStepLog = ({ stepId, log }: any) => {
       setStepLogs(prev => ({
         ...prev,
         [stepId]: [...(prev[stepId] || []), log]
       }));
-    });
+    };
 
-    socket.on('run_waiting_approval', (data: any) => {
+    const onRunWaitingApproval = () => {
       setRun((prev: any) => prev ? { ...prev, status: 'waiting_approval' } : prev);
-    });
+    };
 
-    socket.on('run_resumed', () => {
+    const onRunResumed = () => {
       setRun((prev: any) => prev ? { ...prev, status: 'running' } : prev);
-    });
+    };
 
-    socket.on('run_completed', (data: any) => {
+    const onRunCompleted = (data: any) => {
       setRun((prev: any) => prev ? { ...prev, status: data.status } : prev);
-    });
+    };
+
+    socket.on('step_updated', onStepUpdated);
+    socket.on('step_log', onStepLog);
+    socket.on('run_waiting_approval', onRunWaitingApproval);
+    socket.on('run_resumed', onRunResumed);
+    socket.on('run_completed', onRunCompleted);
 
     return () => {
-      socket.off('step_updated');
-      socket.off('step_log');
-      socket.off('run_waiting_approval');
-      socket.off('run_resumed');
-      socket.off('run_completed');
+      socket.off('step_updated', onStepUpdated);
+      socket.off('step_log', onStepLog);
+      socket.off('run_waiting_approval', onRunWaitingApproval);
+      socket.off('run_resumed', onRunResumed);
+      socket.off('run_completed', onRunCompleted);
     };
   }, [id]);
 
@@ -74,7 +90,16 @@ export default function LiveRun() {
     });
   };
 
-  if (!run) return <div className="p-8">Loading run...</div>;
+  if (error) {
+    return (
+      <div className="p-8 flex items-center gap-3 text-destructive">
+        <AlertCircle className="w-5 h-5" />
+        <span>{error}</span>
+      </div>
+    );
+  }
+
+  if (!run) return <div className="p-8 text-muted-foreground">Loading run...</div>;
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -97,7 +122,7 @@ export default function LiveRun() {
               <div className="flex items-center gap-2 text-muted-foreground">
                 <span className="text-sm">Run ID: <code className="text-foreground">{id}</code></span>
                 <span>•</span>
-                <span className="text-sm">Status: <span className="text-foreground capitalize">{run.status.replace('_', ' ')}</span></span>
+                <span className="text-sm">Status: <span className="text-foreground capitalize">{run.status?.replace(/_/g, ' ')}</span></span>
               </div>
             </div>
             <div className="bg-primary/10 border border-primary/20 px-6 py-4 rounded-xl text-center">
@@ -109,7 +134,7 @@ export default function LiveRun() {
 
           <div className="space-y-4">
             <AnimatePresence>
-              {run.steps.map((step: any, index: number) => (
+              {run.steps.map((step: any) => (
                 <motion.div 
                   key={step.id}
                   initial={{ opacity: 0, x: -20 }}
@@ -148,6 +173,7 @@ export default function LiveRun() {
                       </div>
                     )}
                     {step.status === 'succeeded' && <div className="text-xs font-medium text-green-500">Done</div>}
+                    {step.status === 'skipped' && <div className="text-xs font-medium text-muted-foreground">Skipped</div>}
                   </div>
                 </motion.div>
               ))}
@@ -171,11 +197,15 @@ export default function LiveRun() {
                 <div key={i} className="text-gray-300 whitespace-pre-wrap">{logChunk}</div>
               ))}
               {step.finishedAt && step.status === 'succeeded' && <div className="text-emerald-400">&gt; Success</div>}
+              {step.finishedAt && step.status === 'skipped' && <div className="text-gray-500">&gt; Skipped (condition not met)</div>}
               {step.command === 'approve' && run.status === 'waiting_approval' && step.status === 'pending' && (
                 <div className="text-purple-400 animate-pulse">&gt; WAITING FOR HUMAN APPROVAL...</div>
               )}
             </div>
           ))}
+          {run.steps.length === 0 && (
+            <div className="text-muted-foreground/50">No steps yet...</div>
+          )}
         </div>
       </div>
     </div>

@@ -59,7 +59,7 @@ steps:
     run: webcmd hackernews top -f plain
   - id: gdg_team
     run: webcmd gdg team -f plain
-  - id: check
+  - id: sample
     if: "success"
     run: webcmd site sample
   - id: gate

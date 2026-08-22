@@ -10,46 +10,75 @@ const prisma = new PrismaClient({ adapter });
 async function main() {
   console.log('Seeding database...');
 
-  // 1. Tenants
-  const demoTenant = await prisma.tenant.create({
-    data: { name: 'Acme Corp (Demo)' },
+  // 1. Tenants (upsert by name)
+  const demoTenant = await prisma.tenant.upsert({
+    where: { id: 'seed-tenant-demo' },
+    update: {},
+    create: { id: 'seed-tenant-demo', name: 'Acme Corp (Demo)' },
   });
-  const spectatorTenant = await prisma.tenant.create({
-    data: { name: 'Spectator (Read-Only)' },
-  });
-
-  // 2. Profiles
-  await prisma.profile.createMany({
-    data: [
-      { tenantId: demoTenant.id, siteName: 'github.com', strategy: Strategy.COOKIE, status: 'active' },
-      { tenantId: demoTenant.id, siteName: 'jira.atlassian.com', strategy: Strategy.COOKIE, status: 'active' },
-      { tenantId: demoTenant.id, siteName: 'internal-hr.acme.local', strategy: Strategy.UI, status: 'needs_reauth' },
-    ],
+  await prisma.tenant.upsert({
+    where: { id: 'seed-tenant-spectator' },
+    update: {},
+    create: { id: 'seed-tenant-spectator', name: 'Spectator (Read-Only)' },
   });
 
-  // 3. Adapters
-  const githubAdapter = await prisma.adapter.create({
-    data: { siteName: 'github.com', commandName: 'create-pr', strategy: Strategy.PUBLIC, visibility: 'built_in', successRate: 0.99 },
+  // 2. Adapters (upsert by commandName)
+  const githubAdapter = await prisma.adapter.upsert({
+    where: { id: 'seed-adapter-github' },
+    update: {},
+    create: { id: 'seed-adapter-github', siteName: 'github.com', commandName: 'create-pr', strategy: Strategy.PUBLIC, visibility: 'built_in', successRate: 0.99 },
   });
-  const jiraAdapter = await prisma.adapter.create({
-    data: { siteName: 'jira.atlassian.com', commandName: 'sprint-progress', strategy: Strategy.COOKIE, visibility: 'plugin', successRate: 0.92 },
+  const jiraAdapter = await prisma.adapter.upsert({
+    where: { id: 'seed-adapter-jira' },
+    update: {},
+    create: { id: 'seed-adapter-jira', siteName: 'jira.atlassian.com', commandName: 'sprint-progress', strategy: Strategy.COOKIE, visibility: 'plugin', successRate: 0.92 },
   });
-  const hrAdapter = await prisma.adapter.create({
-    data: { siteName: 'internal-hr.acme.local', commandName: 'approve-pto', strategy: Strategy.UI, visibility: 'private', successRate: 0.74 },
-  });
-
-  // 4. Drift Events
-  await prisma.driftEvent.createMany({
-    data: [
-      { adapterId: hrAdapter.id, classification: 'selector_drift', status: 'resolved', diffSummary: 'Button .submit-pto changed to .btn-primary', resolvedAt: new Date() },
-      { adapterId: jiraAdapter.id, classification: 'auth_expired', status: 'detected', diffSummary: 'Session cookie rejected with 401' },
-      { adapterId: hrAdapter.id, classification: 'site_redesign', status: 'healing', diffSummary: 'Entire DOM structure changed for PTO form' },
-    ],
+  const hrAdapter = await prisma.adapter.upsert({
+    where: { id: 'seed-adapter-hr' },
+    update: {},
+    create: { id: 'seed-adapter-hr', siteName: 'internal-hr.acme.local', commandName: 'approve-pto', strategy: Strategy.UI, visibility: 'private', successRate: 0.74 },
   });
 
-  // 5. Workflows
-  const weeklyDigest = await prisma.workflow.create({
-    data: {
+  // 3. Profiles (upsert by id)
+  await prisma.profile.upsert({
+    where: { id: 'seed-profile-github' },
+    update: {},
+    create: { id: 'seed-profile-github', tenantId: demoTenant.id, siteName: 'github.com', strategy: Strategy.COOKIE, status: 'active' },
+  });
+  await prisma.profile.upsert({
+    where: { id: 'seed-profile-jira' },
+    update: {},
+    create: { id: 'seed-profile-jira', tenantId: demoTenant.id, siteName: 'jira.atlassian.com', strategy: Strategy.COOKIE, status: 'active' },
+  });
+  await prisma.profile.upsert({
+    where: { id: 'seed-profile-hr' },
+    update: {},
+    create: { id: 'seed-profile-hr', tenantId: demoTenant.id, siteName: 'internal-hr.acme.local', strategy: Strategy.UI, status: 'needs_reauth' },
+  });
+
+  // 4. Drift Events (upsert by id)
+  await prisma.driftEvent.upsert({
+    where: { id: 'seed-drift-1' },
+    update: {},
+    create: { id: 'seed-drift-1', adapterId: hrAdapter.id, classification: 'selector_drift', status: 'resolved', diffSummary: 'Button .submit-pto changed to .btn-primary', resolvedAt: new Date() },
+  });
+  await prisma.driftEvent.upsert({
+    where: { id: 'seed-drift-2' },
+    update: {},
+    create: { id: 'seed-drift-2', adapterId: jiraAdapter.id, classification: 'auth_expired', status: 'detected', diffSummary: 'Session cookie rejected with 401' },
+  });
+  await prisma.driftEvent.upsert({
+    where: { id: 'seed-drift-3' },
+    update: {},
+    create: { id: 'seed-drift-3', adapterId: hrAdapter.id, classification: 'site_redesign', status: 'healing', diffSummary: 'Entire DOM structure changed for PTO form' },
+  });
+
+  // 5. Workflow (upsert by id)
+  const weeklyDigest = await prisma.workflow.upsert({
+    where: { id: 'seed-workflow-weekly' },
+    update: {},
+    create: {
+      id: 'seed-workflow-weekly',
       tenantId: demoTenant.id,
       name: 'weekly-pipeline-digest',
       dsl: {
@@ -66,29 +95,36 @@ async function main() {
     },
   });
 
-  // 6. Runs & RunSteps
-  const pastRun = await prisma.run.create({
-    data: {
+  // 6. Past run (upsert by id)
+  const pastRun = await prisma.run.upsert({
+    where: { id: 'seed-run-1' },
+    update: {},
+    create: {
+      id: 'seed-run-1',
       workflowId: weeklyDigest.id,
       tenantId: demoTenant.id,
       status: 'succeeded',
       costTokensSaved: 1450,
-      startedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // 1 week ago
-      finishedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000 + 120000), // + 2 mins
+      startedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+      finishedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000 + 120000),
     },
   });
 
-  await prisma.runStep.createMany({
-    data: [
-      { runId: pastRun.id, index: 0, command: 'webcmd jira sprint-progress --board=eng', strategy: Strategy.COOKIE, status: 'succeeded' },
-      { runId: pastRun.id, index: 1, command: 'webcmd grafana panel-export --dashboard=latency', strategy: Strategy.LOCAL, status: 'succeeded' },
-      { runId: pastRun.id, index: 2, command: 'webcmd slack post --channel=#eng-leads --template=escalation', strategy: Strategy.PUBLIC, status: 'skipped' },
-      { runId: pastRun.id, index: 3, command: 'approve', strategy: Strategy.LOCAL, status: 'succeeded' },
-      { runId: pastRun.id, index: 4, command: 'webcmd notion append-page --page=weekly-report', strategy: Strategy.PUBLIC, status: 'succeeded' },
-    ],
-  });
+  // Only seed steps if the run has none yet
+  const existingSteps = await prisma.runStep.count({ where: { runId: pastRun.id } });
+  if (existingSteps === 0) {
+    await prisma.runStep.createMany({
+      data: [
+        { runId: pastRun.id, index: 0, command: 'webcmd jira sprint-progress --board=eng', strategy: Strategy.COOKIE, status: 'succeeded' },
+        { runId: pastRun.id, index: 1, command: 'webcmd grafana panel-export --dashboard=latency', strategy: Strategy.LOCAL, status: 'succeeded' },
+        { runId: pastRun.id, index: 2, command: 'webcmd slack post --channel=#eng-leads --template=escalation', strategy: Strategy.PUBLIC, status: 'skipped' },
+        { runId: pastRun.id, index: 3, command: 'approve', strategy: Strategy.LOCAL, status: 'succeeded' },
+        { runId: pastRun.id, index: 4, command: 'webcmd notion append-page --page=weekly-report', strategy: Strategy.PUBLIC, status: 'succeeded' },
+      ],
+    });
+  }
 
-  console.log('Database seeded successfully.');
+  console.log('✅ Database seeded successfully.');
 }
 
 main()

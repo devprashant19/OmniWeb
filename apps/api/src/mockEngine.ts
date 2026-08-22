@@ -1,7 +1,7 @@
-import { prisma } from './db';
-import { getSocket } from './socket';
+import { prisma } from './db.js';
+import { getSocket } from './socket.js';
 import { Strategy } from '@prisma/client';
-import { WorkflowDSL } from './workflowParser';
+import type { WorkflowDSL } from './workflowParser.js';
 
 const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
@@ -22,10 +22,11 @@ export async function runWorkflow(workflowId: string, tenantId: string, dsl: Wor
   // 2. Execute steps
   for (let i = 0; i < dsl.steps.length; i++) {
     const stepDef = dsl.steps[i];
-    
-    let command = stepDef.run || 'approve';
-    let strategy = Strategy.COOKIE;
-    
+    if (!stepDef) continue; // guard for noUncheckedIndexedAccess
+
+    let command = stepDef.run ?? (stepDef.approve ? 'approve' : 'noop');
+    let strategy: Strategy = Strategy.COOKIE;
+
     // Pick strategy based on command
     if (command.includes('slack') || command.includes('notion')) strategy = Strategy.PUBLIC;
     else if (command.includes('grafana')) strategy = Strategy.LOCAL;
@@ -44,7 +45,7 @@ export async function runWorkflow(workflowId: string, tenantId: string, dsl: Wor
     getSocket().to(`run_${run.id}`).emit('step_updated', step);
 
     // If it's an approve step, pause execution
-    if (stepDef.approve) {
+    if (stepDef.approve ?? false) {
       await prisma.runStep.update({ where: { id: step.id }, data: { status: 'pending' } });
       await prisma.run.update({ where: { id: run.id }, data: { status: 'waiting_approval' } });
       getSocket().to(`run_${run.id}`).emit('run_waiting_approval', { runId: run.id, stepId: step.id });
@@ -115,9 +116,10 @@ export async function resumeWorkflow(runId: string, stepId: string) {
   let costTokensSaved = step.run.costTokensSaved;
   for (let i = step.index + 1; i < dsl.steps.length; i++) {
     const stepDef = dsl.steps[i];
-    
-    let command = stepDef.run || 'approve';
-    let strategy = Strategy.PUBLIC;
+    if (!stepDef) continue; // guard for noUncheckedIndexedAccess
+
+    let command = stepDef.run ?? (stepDef.approve ? 'approve' : 'noop');
+    const strategy: Strategy = Strategy.PUBLIC;
     
     const nextStep = await prisma.runStep.create({
       data: {
@@ -172,8 +174,12 @@ export async function resumeWorkflow(runId: string, stepId: string) {
 export async function triggerSimulatedDrift() {
   // Grab a random adapter to fail
   const adapters = await prisma.adapter.findMany();
-  if (adapters.length === 0) return;
+  if (adapters.length === 0) {
+    console.error('[mockEngine] triggerSimulatedDrift: No adapters in DB. Run prisma db seed first.');
+    throw new Error('No adapters found. Seed the database before triggering drift.');
+  }
   const target = adapters[Math.floor(Math.random() * adapters.length)];
+  if (!target) throw new Error('Failed to select a random adapter.'); // guard for noUncheckedIndexedAccess
 
   const driftEvent = await prisma.driftEvent.create({
     data: {
