@@ -5,7 +5,7 @@ WORKDIR /app
 COPY package*.json ./
 COPY apps/web/package.json apps/web/
 
-RUN npm ci --omit=dev
+RUN npm install --omit=dev
 
 # ── Stage 2: build ─────────────────────────────────────────────
 FROM node:22-alpine AS builder
@@ -14,7 +14,7 @@ WORKDIR /app
 COPY package*.json ./
 COPY apps/web/package.json apps/web/
 
-RUN npm ci
+RUN npm install
 
 COPY apps/web apps/web
 
