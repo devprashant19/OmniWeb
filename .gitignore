@@ -1,0 +1,14 @@
+node_modules/
+.env
+*.log
+dist/
+.DS_Store
+.vscode/
+*.tsbuildinfo
+
+# Prisma
+apps/api/prisma/migrations/
+
+# Docker volumes
+postgres_data/
+redis_data/
