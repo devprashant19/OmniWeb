@@ -40,4 +40,4 @@ COPY --from=builder /app/package.json ./package.json
 WORKDIR /app/apps/api
 EXPOSE 3001
 
-CMD ["npx", "tsx", "src/index.ts"]
+CMD ["npm", "run", "start"]
