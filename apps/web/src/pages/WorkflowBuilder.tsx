@@ -69,7 +69,7 @@ steps:
 `;
       const res = await fetchAPI('/workflows/run', {
         method: 'POST',
-        body: JSON.stringify({ yaml: sampleYaml, tenantId: 'cm02abcd0001dummytenant123' }) // We use a dummy tenant for demo, in real life we fetch tenants. Wait, I should fetch a tenant ID.
+        body: JSON.stringify({ yaml: sampleYaml, tenantId: tenantId })
       });
       navigate(`/runs/${res.runId}`);
     } catch (err) {
