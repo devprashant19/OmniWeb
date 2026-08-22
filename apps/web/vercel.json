@@ -1,7 +1,0 @@
-{
-  "buildCommand": "cd ../.. && npm install && cd apps/web && CI='' npx vite build",
-  "outputDirectory": "dist",
-  "framework": "vite",
-  "installCommand": "npm install",
-  "devCommand": "npx vite --port 5173"
-}
